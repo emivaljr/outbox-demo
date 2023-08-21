@@ -26,5 +26,10 @@ public class UserEntity {
     public static UserEntity fromModel(User user){
         return new UserEntity(UUID.randomUUID(),user.getName(),user.getBirth());
     }
+    public User toDomain(){
+        return new User(this.name,this.birth);
+    }
+
+
     
 }

@@ -1,6 +1,5 @@
 package com.picpay.outbox.demo.service;
 
-import com.picpay.outbox.demo.model.User;
 import com.picpay.outbox.demo.model.UserEvent;
 import com.picpay.outbox.demo.model.entity.UserEntity;
 import com.picpay.outbox.demo.model.entity.UserEventEntity;
@@ -9,15 +8,14 @@ import com.picpay.outbox.demo.repository.UserEventRepository;
 import com.picpay.outbox.demo.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.common.protocol.Message;
-import org.springframework.cloud.stream.function.StreamBridge;
-import org.springframework.messaging.support.MessageBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 @RequiredArgsConstructor
 @Service
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -27,14 +25,29 @@ public class UserService {
     private final UserMessageProducer userMessageProducer;
     
     @Transactional
-    public void insertUser(User user){
+    public void processEvent(UserEvent event){
+        log.info("Saving User");
         //Save User
-        var userEntity = UserEntity.fromModel(user);
+        var userEntity = UserEntity.fromModel(event.getUser());
         userRepository.save(userEntity);
+        log.info("Saving Event");
         //Save Event
         var userEventEntity = UserEventEntity.newEventEntity(userEntity);
         userEventRepository.save(userEventEntity);
-        //Send Event
-        userMessageProducer.sendEvent(new UserEvent(userEventEntity.getId(),userEventEntity.getType(),user));
+    }
+
+    @Transactional
+    public void sendMessages() {
+        var events = userEventRepository
+                .findAll();
+        if(!events.iterator().hasNext()){
+            log.info("No messages to process, exiting now!");
+        }
+            events
+                .forEach(userEventEntity -> {
+                    log.info("Sending message");
+                    userMessageProducer.sendEvent(userEventEntity.toDomain());
+                    userEventRepository.delete(userEventEntity);
+                });
     }
 }
